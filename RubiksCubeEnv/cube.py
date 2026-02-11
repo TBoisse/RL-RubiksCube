@@ -240,6 +240,7 @@ class RubiksCube:
         actions = self.action_space.sample(scramble_length)
         for action in actions:
             self.step(action)
+        self.step_count = 0
         return np.array(self.state), None
 
     def restart(self):
