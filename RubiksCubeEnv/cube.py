@@ -1,6 +1,8 @@
 import numpy as np
 import random
 
+from RubiksCubeEnv.utils import ActionSpace, ObservationSpace
+
 
 class RubiksCube:
     """
@@ -18,12 +20,13 @@ class RubiksCube:
         B: "B",
     }
 
-    def __init__(self, n: int, maximum_step = 100):
+    def __init__(self, n: int, _max_episode_steps = 100):
         self.n = n
-        self.size = 6 * n * n
-        self.maximum_step = maximum_step
+        self.observation_space = ObservationSpace(0, 5, 6 * n * n, int)
+        self.action_space = ActionSpace(3 * 3 * self.n) # 3 moves id, 3 variants, n layers
+        self._max_episode_steps = _max_episode_steps
         self.step_count = 0
-        self.state = np.zeros(self.size, dtype=np.int8)
+        self.state = np.zeros(self.observation_space.shape[0], dtype=np.int8)
 
     # --------------------------------------------------
     # Auxiliary functions
@@ -80,11 +83,12 @@ class RubiksCube:
         :param action: An action to transform [Hyp > action is in action_space].
         :type action: int
         """
-        type_id = action // (3 * self.n)
+        move_id = action // (3 * self.n)
         rem = action % (3 * self.n)
         layer = rem // 3
         variant = rem % 3
-        return type_id, layer, variant
+        return move_id, layer, variant
+
     # --------------------------------------------------
     # Core moves (R, U, F generators)
     # --------------------------------------------------
@@ -220,23 +224,23 @@ class RubiksCube:
         return ret
 
     def step(self, action: int):
-        max_actions = 3 * self.n * 6
-        if not (0 <= action < max_actions):
-            raise ValueError(f"*-* Action {action} if out of action space {max_actions}")
+        if not self.action_space.in_bound(action):
+            raise ValueError(f"*-* Action {action} if out of action space {self.action_space}")
 
         move_id, layer, variant = self._action_to_move_details(action)
         self._apply_move(move_id, layer, variant)
         
         reward = self.reward()
         self.step_count += 1
-        is_terminated = reward == self.size or self.step_count == self.maximum_step
-        return self.state, reward, is_terminated, is_terminated, None
+        is_terminated = reward == self.observation_space.shape[0] or self.step_count == self._max_episode_steps
+        return np.array(self.state), reward, is_terminated, is_terminated, None
 
-    def reset(self, m: int):
+    def reset(self, scramble_length : int = 13):
         self.restart()
-        for _ in range(m):
-            action = random.randint(0, 3 * self.n * 6 - 1)
+        actions = self.action_space.sample(scramble_length)
+        for action in actions:
             self.step(action)
+        return np.array(self.state), None
 
     def restart(self):
         for face in range(6):
